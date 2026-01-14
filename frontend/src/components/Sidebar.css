@@ -50,11 +50,14 @@
 }
 
 .conversation-item {
+  display: block;
   padding: 12px;
   margin-bottom: 4px;
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.2s;
+  text-decoration: none;
+  color: inherit;
 }
 
 .conversation-item:hover {

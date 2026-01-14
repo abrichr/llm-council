@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import './Sidebar.css';
 
 export default function Sidebar({
@@ -7,6 +6,16 @@ export default function Sidebar({
   onSelectConversation,
   onNewConversation,
 }) {
+  const handleConversationClick = (e, id) => {
+    // Allow cmd+click (Mac) or ctrl+click (Windows) to open in new tab
+    if (e.metaKey || e.ctrlKey) {
+      // Let the default anchor behavior handle it
+      return;
+    }
+    e.preventDefault();
+    onSelectConversation(id);
+  };
+
   return (
     <div className="sidebar">
       <div className="sidebar-header">
@@ -21,12 +30,13 @@ export default function Sidebar({
           <div className="no-conversations">No conversations yet</div>
         ) : (
           conversations.map((conv) => (
-            <div
+            <a
               key={conv.id}
+              href={`?conversation=${conv.id}`}
               className={`conversation-item ${
                 conv.id === currentConversationId ? 'active' : ''
               }`}
-              onClick={() => onSelectConversation(conv.id)}
+              onClick={(e) => handleConversationClick(e, conv.id)}
             >
               <div className="conversation-title">
                 {conv.title || 'New Conversation'}
@@ -34,7 +44,7 @@ export default function Sidebar({
               <div className="conversation-meta">
                 {conv.message_count} messages
               </div>
-            </div>
+            </a>
           ))
         )}
       </div>

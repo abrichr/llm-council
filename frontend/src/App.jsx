@@ -10,9 +10,16 @@ function App() {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load conversations on mount
+  // Load conversations on mount and check URL for conversation ID
   useEffect(() => {
     loadConversations();
+
+    // Check URL for conversation parameter
+    const params = new URLSearchParams(window.location.search);
+    const conversationId = params.get('conversation');
+    if (conversationId) {
+      setCurrentConversationId(conversationId);
+    }
   }, []);
 
   // Load conversation details when selected
@@ -42,6 +49,7 @@ function App() {
 
   const handleNewConversation = async () => {
     try {
+      setIsLoading(false); // Reset loading state when creating new conversation
       const newConv = await api.createConversation();
       setConversations([
         { id: newConv.id, created_at: newConv.created_at, message_count: 0 },
@@ -54,7 +62,10 @@ function App() {
   };
 
   const handleSelectConversation = (id) => {
+    setIsLoading(false); // Reset loading state when switching conversations
     setCurrentConversationId(id);
+    // Update URL without page reload
+    window.history.pushState({}, '', `?conversation=${id}`);
   };
 
   const handleSendMessage = async (content) => {
