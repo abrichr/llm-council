@@ -222,6 +222,24 @@ const UserMessage = memo(function UserMessage({
               )}
             </>
           )}
+          <button
+            className="scroll-nav-btn"
+            onClick={scrollToTop}
+            title="Scroll to top of message"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+          </button>
+          <button
+            className="scroll-nav-btn"
+            onClick={onScrollToResponse}
+            title="Scroll to response"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
         </div>
       </div>
       <div className="message-content">
@@ -262,26 +280,6 @@ const UserMessage = memo(function UserMessage({
           <span>Generating new response...</span>
         </div>
       )}
-      <div className="scroll-nav-container">
-        <button
-          className="scroll-nav-btn"
-          onClick={onScrollToResponse}
-          title="Scroll to response"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-        <button
-          className="scroll-nav-btn"
-          onClick={scrollToTop}
-          title="Scroll to top of message"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="18 15 12 9 6 15" />
-          </svg>
-        </button>
-      </div>
     </div>
   );
 });
@@ -362,6 +360,24 @@ const AssistantMessage = memo(function AssistantMessage({
               )}
             </button>
           )}
+          <button
+            className="scroll-nav-btn"
+            onClick={scrollToTop}
+            title="Scroll to top of response"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+          </button>
+          <button
+            className="scroll-nav-btn"
+            onClick={scrollToBottom}
+            title="Scroll to bottom of response"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -397,34 +413,12 @@ const AssistantMessage = memo(function AssistantMessage({
         </div>
       )}
       {msg.stage3 && <Stage3 finalResponse={msg.stage3} />}
-
-      {/* Scroll navigation buttons */}
-      <div className="scroll-nav-container">
-        <button
-          className="scroll-nav-btn"
-          onClick={scrollToBottom}
-          title="Scroll to bottom of response"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-        <button
-          className="scroll-nav-btn"
-          onClick={scrollToTop}
-          title="Scroll to top of response"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polyline points="18 15 12 9 6 15" />
-          </svg>
-        </button>
-      </div>
     </div>
   );
 });
 
 // Threshold filter component
-function ThresholdFilter({ label, icon, value, onChange, accentColor }) {
+function ThresholdFilter({ label, icon, value, onChange, accentColor, description }) {
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
@@ -457,15 +451,20 @@ function ThresholdFilter({ label, icon, value, onChange, accentColor }) {
     }
   };
 
-  const displayValue = value > 0 ? `${(value / 1000).toFixed(0)}k` : 'Off';
+  const displayValue = value > 0 ? `>${(value / 1000).toFixed(0)}k` : 'Off';
+  const tooltipText = value > 0
+    ? `${description} Messages over ${(value / 1000).toFixed(0)}k chars are auto-excluded. Click to change.`
+    : `${description} Currently disabled. Click to set a threshold.`;
 
   return (
     <div
       className={`threshold-filter ${value > 0 ? 'active' : ''}`}
       style={{ '--accent-color': accentColor }}
+      title={tooltipText}
     >
       <span className="threshold-icon">{icon}</span>
       <span className="threshold-label">{label}</span>
+      <span className="threshold-action">skip</span>
       {isEditing ? (
         <input
           ref={inputRef}
@@ -480,7 +479,7 @@ function ThresholdFilter({ label, icon, value, onChange, accentColor }) {
           placeholder="k"
         />
       ) : (
-        <button className="threshold-value" onClick={handleClick} title="Click to edit threshold (in thousands)">
+        <button className="threshold-value" onClick={handleClick}>
           {displayValue}
         </button>
       )}
@@ -678,14 +677,10 @@ const MessagesList = memo(function MessagesList({
     <div className="messages-container" ref={containerRef}>
       {messages.length > 0 && (
         <div className="conversation-toolbar">
-          {messages.length > 2 && (
-            <div className="context-indicator">
-              Using conversation context ({messages.length} messages)
-            </div>
-          )}
           <div className="toolbar-filters">
             <ThresholdFilter
-              label="Copy"
+              label="Export"
+              description="Auto-exclude long messages from copy/export."
               icon={
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
                   <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -697,7 +692,8 @@ const MessagesList = memo(function MessagesList({
               accentColor="#2196f3"
             />
             <ThresholdFilter
-              label="AI"
+              label="Context"
+              description="Auto-exclude long messages from AI context."
               icon={
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
                   <rect x="3" y="3" width="18" height="18" rx="2" />
