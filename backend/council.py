@@ -7,7 +7,8 @@ from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
 
 async def stage1_collect_responses(
     user_query: str,
-    conversation_history: List[Dict[str, Any]] = None
+    conversation_history: List[Dict[str, Any]] = None,
+    on_model_complete: callable = None
 ) -> List[Dict[str, Any]]:
     """
     Stage 1: Collect individual responses from all council models.
@@ -15,6 +16,7 @@ async def stage1_collect_responses(
     Args:
         user_query: The user's question
         conversation_history: Previous messages in the conversation (optional)
+        on_model_complete: Optional callback(model, response) for progress tracking
 
     Returns:
         List of dicts with 'model' and 'response' keys
@@ -47,8 +49,12 @@ async def stage1_collect_responses(
     print(f"Total messages to send: {len(messages)}")
     print("=== END DEBUG ===\n")
 
-    # Query all models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    # Query all models in parallel with progress callback
+    responses = await query_models_parallel(
+        COUNCIL_MODELS,
+        messages,
+        on_model_complete=on_model_complete
+    )
 
     # Format results
     stage1_results = []
@@ -64,7 +70,8 @@ async def stage1_collect_responses(
 
 async def stage2_collect_rankings(
     user_query: str,
-    stage1_results: List[Dict[str, Any]]
+    stage1_results: List[Dict[str, Any]],
+    on_model_complete: callable = None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -124,8 +131,12 @@ Now provide your evaluation and ranking:"""
 
     messages = [{"role": "user", "content": ranking_prompt}]
 
-    # Get rankings from all council models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    # Get rankings from all council models in parallel with progress callback
+    responses = await query_models_parallel(
+        COUNCIL_MODELS,
+        messages,
+        on_model_complete=on_model_complete
+    )
 
     # Format results
     stage2_results = []

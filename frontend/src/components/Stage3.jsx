@@ -1,6 +1,5 @@
 import { useState, memo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import Markdown from './Markdown';
 import './Stage3.css';
 
 function CopyButton({ text }) {
@@ -57,10 +56,8 @@ export default memo(function Stage3({ finalResponse }) {
         <div className="chairman-label">
           Chairman: {finalResponse.model.split('/')[1] || finalResponse.model}
         </div>
-        <div className="final-text markdown-content">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {finalResponse.response}
-          </ReactMarkdown>
+        <div className="final-text">
+          <Markdown>{finalResponse.response}</Markdown>
         </div>
       </div>
     </div>

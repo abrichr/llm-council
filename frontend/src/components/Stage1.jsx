@@ -1,6 +1,5 @@
 import { useState, memo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import Markdown from './Markdown';
 import './Stage1.css';
 
 function CopyButton({ text }) {
@@ -44,38 +43,58 @@ function CopyButton({ text }) {
 
 export default memo(function Stage1({ responses }) {
   const [activeTab, setActiveTab] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   if (!responses || responses.length === 0) {
     return null;
   }
 
   return (
-    <div className="stage stage1">
-      <h3 className="stage-title">Stage 1: Individual Responses</h3>
+    <div className={`stage stage1 ${isExpanded ? 'expanded' : 'collapsed'}`}>
+      <button
+        className="stage-header"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <h3 className="stage-title">Stage 1: Individual Responses</h3>
+        <span className="stage-summary">
+          {responses.length} model{responses.length !== 1 ? 's' : ''}
+        </span>
+        <svg
+          className={`expand-icon ${isExpanded ? 'expanded' : ''}`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
 
-      <div className="tabs">
-        {responses.map((resp, index) => (
-          <button
-            key={index}
-            className={`tab ${activeTab === index ? 'active' : ''}`}
-            onClick={() => setActiveTab(index)}
-          >
-            {resp.model.split('/')[1] || resp.model}
-          </button>
-        ))}
-      </div>
+      {isExpanded && (
+        <div className="stage-content">
+          <div className="tabs">
+            {responses.map((resp, index) => (
+              <button
+                key={index}
+                className={`tab ${activeTab === index ? 'active' : ''}`}
+                onClick={() => setActiveTab(index)}
+              >
+                {resp.model.split('/')[1] || resp.model}
+              </button>
+            ))}
+          </div>
 
-      <div className="tab-content">
-        <div className="tab-content-header">
-          <div className="model-name">{responses[activeTab].model}</div>
-          <CopyButton text={responses[activeTab].response} />
+          <div className="tab-content">
+            <div className="tab-content-header">
+              <div className="model-name">{responses[activeTab].model}</div>
+              <CopyButton text={responses[activeTab].response} />
+            </div>
+            <div className="response-text">
+              <Markdown>{responses[activeTab].response}</Markdown>
+            </div>
+          </div>
         </div>
-        <div className="response-text markdown-content">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {responses[activeTab].response}
-          </ReactMarkdown>
-        </div>
-      </div>
+      )}
     </div>
   );
 });

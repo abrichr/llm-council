@@ -12,7 +12,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # Council members - format: "provider/model"
 COUNCIL_MODELS = [
-    "openai/gpt-5.2-pro",
+    "openai/gpt-5.2",
     "google/gemini-3-pro-preview",  # Latest Gemini model
     "anthropic/claude-sonnet-4-5",
 ]

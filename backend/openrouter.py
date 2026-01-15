@@ -235,20 +235,54 @@ async def query_model(
 
 async def query_models_parallel(
     models: List[str],
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, str]],
+    on_model_complete: Optional[callable] = None,
+    hard_timeout: float = 180.0  # Hard timeout per model (3 minutes)
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
-    Query multiple models in parallel.
+    Query multiple models in parallel with progress tracking and hard timeout.
 
     Args:
         models: List of model identifiers in format "provider/model-name"
         messages: List of message dicts to send to each model
+        on_model_complete: Optional callback(model, response) called as each model completes
+        hard_timeout: Hard timeout per model in seconds (fails if exceeded)
 
     Returns:
         Dict mapping model identifier to response dict (or None if failed)
     """
     import asyncio
 
-    tasks = [query_model(model, messages) for model in models]
-    responses = await asyncio.gather(*tasks)
-    return {model: response for model, response in zip(models, responses)}
+    results: Dict[str, Optional[Dict[str, Any]]] = {}
+
+    async def query_with_timeout(model: str) -> tuple[str, Optional[Dict[str, Any]]]:
+        """Query a model with a hard timeout."""
+        try:
+            response = await asyncio.wait_for(
+                query_model(model, messages),
+                timeout=hard_timeout
+            )
+            return model, response
+        except asyncio.TimeoutError:
+            print(f"HARD TIMEOUT: Model {model} exceeded {hard_timeout}s limit")
+            return model, None
+        except Exception as e:
+            print(f"Error querying {model}: {type(e).__name__}: {e}")
+            return model, None
+
+    # Create tasks for all models
+    tasks = [asyncio.create_task(query_with_timeout(model)) for model in models]
+
+    # Process results as they complete (not waiting for all)
+    for completed_task in asyncio.as_completed(tasks):
+        model, response = await completed_task
+        results[model] = response
+
+        # Call progress callback if provided
+        if on_model_complete:
+            try:
+                await on_model_complete(model, response)
+            except Exception as e:
+                print(f"Error in on_model_complete callback: {e}")
+
+    return results
