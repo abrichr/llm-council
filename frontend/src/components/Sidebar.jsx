@@ -12,6 +12,7 @@ export default function Sidebar({
   onDeleteConversation,
   showArchived = false,
   onToggleShowArchived,
+  onOpenSearch,
 }) {
   const [confirmDelete, setConfirmDelete] = useState(null); // conversation id to confirm delete
 
@@ -68,6 +69,15 @@ export default function Sidebar({
           + New Conversation
         </button>
       </div>
+
+      <button className="search-btn" onClick={onOpenSearch}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="11" cy="11" r="8" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
+        <span>Search conversations</span>
+        <kbd>⌘K</kbd>
+      </button>
 
       <div className="sidebar-tabs">
         <button

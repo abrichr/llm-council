@@ -333,7 +333,7 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
 
 def save_conversation(conversation: Dict[str, Any]):
     """
-    Save a conversation to storage.
+    Save a conversation to storage and update search index.
 
     Args:
         conversation: Conversation dict to save
@@ -343,6 +343,13 @@ def save_conversation(conversation: Dict[str, Any]):
     path = get_conversation_path(conversation['id'])
     with open(path, 'w') as f:
         json.dump(conversation, f, indent=2)
+
+    # Update search index (lazy import to avoid circular dependency)
+    try:
+        from . import search
+        search.index_conversation(conversation, is_archived=False)
+    except Exception:
+        pass  # Don't fail save if indexing fails
 
 
 def list_conversations() -> List[Dict[str, Any]]:
@@ -673,7 +680,7 @@ def get_conversation_with_path(conversation_id: str) -> Optional[Dict[str, Any]]
 
 def delete_conversation(conversation_id: str) -> bool:
     """
-    Delete a conversation from storage.
+    Delete a conversation from storage and search index.
 
     Args:
         conversation_id: Unique identifier for the conversation
@@ -687,6 +694,14 @@ def delete_conversation(conversation_id: str) -> bool:
         return False
 
     os.remove(path)
+
+    # Remove from search index
+    try:
+        from . import search
+        search.remove_conversation_from_index(conversation_id)
+    except Exception:
+        pass
+
     return True
 
 
@@ -705,11 +720,23 @@ def archive_conversation(conversation_id: str) -> bool:
     if not os.path.exists(source_path):
         return False
 
+    # Load conversation for re-indexing
+    conversation = get_conversation(conversation_id)
+
     ensure_archive_dir()
     dest_path = get_archived_conversation_path(conversation_id)
 
     # Move the file
     os.rename(source_path, dest_path)
+
+    # Update search index with archived flag
+    if conversation:
+        try:
+            from . import search
+            search.index_conversation(conversation, is_archived=True)
+        except Exception:
+            pass
+
     return True
 
 
@@ -728,11 +755,23 @@ def unarchive_conversation(conversation_id: str) -> bool:
     if not os.path.exists(source_path):
         return False
 
+    # Load conversation for re-indexing
+    conversation = get_conversation(conversation_id)
+
     ensure_data_dir()
     dest_path = get_conversation_path(conversation_id)
 
     # Move the file back
     os.rename(source_path, dest_path)
+
+    # Update search index with unarchived flag
+    if conversation:
+        try:
+            from . import search
+            search.index_conversation(conversation, is_archived=False)
+        except Exception:
+            pass
+
     return True
 
 

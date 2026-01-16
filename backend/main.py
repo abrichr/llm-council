@@ -10,6 +10,7 @@ import json
 import asyncio
 
 from . import storage
+from . import search
 from .council import (
     run_full_council,
     generate_conversation_title,
@@ -695,6 +696,54 @@ async def unarchive_conversation(conversation_id: str):
 async def list_archived_conversations():
     """List all archived conversations (metadata only)."""
     return storage.list_archived_conversations()
+
+
+# ============== Search Endpoints ==============
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize search index on startup."""
+    search.ensure_index_exists()
+
+
+@app.get("/api/search")
+async def search_conversations(
+    q: str,
+    limit: int = 20,
+    include_archived: bool = True
+):
+    """
+    Search across all conversations.
+
+    Args:
+        q: Search query string
+        limit: Maximum results to return (default 20)
+        include_archived: Include archived conversations (default true)
+
+    Returns:
+        Search results with conversation info and snippets
+    """
+    if not q or not q.strip():
+        return {"results": [], "query": q, "total_results": 0}
+
+    results = search.search(q, limit=limit, include_archived=include_archived)
+
+    return {
+        "results": results,
+        "query": q,
+        "total_results": len(results)
+    }
+
+
+@app.post("/api/search/rebuild")
+async def rebuild_search_index():
+    """
+    Rebuild the search index from scratch.
+
+    This re-indexes all active and archived conversations.
+    """
+    result = search.rebuild_index()
+    return result
 
 
 if __name__ == "__main__":

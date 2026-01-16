@@ -36,6 +36,48 @@
   border-color: #357abd;
 }
 
+.search-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 32px);
+  margin: 12px 16px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.search-btn:hover {
+  background: #f5f5f5;
+  border-color: #ccc;
+  color: #333;
+}
+
+.search-btn svg {
+  flex-shrink: 0;
+  color: #999;
+}
+
+.search-btn span {
+  flex: 1;
+  text-align: left;
+}
+
+.search-btn kbd {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: #666;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
 .conversation-list {
   flex: 1;
   overflow-y: auto;

@@ -907,7 +907,7 @@
   align-items: flex-start;
 }
 
-.stage-loading:has(.model-progress) > .spinner {
+.stage-loading:has(.model-progress) .stage-loading-header .spinner {
   display: none;
 }
 

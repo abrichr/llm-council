@@ -328,4 +328,38 @@ export const api = {
     }
     return response.json();
   },
+
+  /**
+   * Search across all conversations.
+   * @param {string} query - Search query string
+   * @param {number} limit - Maximum results (default 20)
+   * @param {boolean} includeArchived - Include archived conversations (default true)
+   * @returns {Promise<{results: Array, query: string, total_results: number}>}
+   */
+  async search(query, limit = 20, includeArchived = true) {
+    const params = new URLSearchParams({
+      q: query,
+      limit: limit.toString(),
+      include_archived: includeArchived.toString(),
+    });
+    const response = await fetch(`${API_BASE}/api/search?${params}`);
+    if (!response.ok) {
+      throw new Error('Failed to search conversations');
+    }
+    return response.json();
+  },
+
+  /**
+   * Rebuild the search index.
+   * @returns {Promise<{status: string, indexed_conversations: number, indexed_messages: number, duration_ms: number}>}
+   */
+  async rebuildSearchIndex() {
+    const response = await fetch(`${API_BASE}/api/search/rebuild`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to rebuild search index');
+    }
+    return response.json();
+  },
 };

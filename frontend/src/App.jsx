@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
+import Search from './components/Search';
 import { api } from './api';
 import './App.css';
 
@@ -75,6 +76,20 @@ function App() {
   const [excludedFromContext, setExcludedFromContext] = useState(new Set()); // Messages manually excluded from API context
   const [copyCharThreshold, setCopyCharThreshold] = useState(100000); // Auto-exclude from copy if > this
   const [contextCharThreshold, setContextCharThreshold] = useState(100000); // Auto-exclude from context if > this
+  const [isSearchOpen, setIsSearchOpen] = useState(false); // Search modal state
+
+  // Global keyboard shortcut for search (Cmd+K / Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Load conversations on mount and check URL for conversation ID
   useEffect(() => {
@@ -1009,6 +1024,12 @@ function App() {
         onDeleteConversation={handleDeleteConversation}
         showArchived={showArchived}
         onToggleShowArchived={handleToggleShowArchived}
+        onOpenSearch={() => setIsSearchOpen(true)}
+      />
+      <Search
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onSelectConversation={handleSelectConversation}
       />
       <ChatInterface
         conversation={currentConversation}
