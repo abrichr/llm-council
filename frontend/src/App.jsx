@@ -171,6 +171,15 @@ function App() {
           return true; // Stop polling
         }
 
+        // Check for stale status (job died without cleanup, e.g., server restart)
+        if (jobInfo.status === 'stale') {
+          console.log('Job is stale (server restart or crash):', pendingMessageId);
+          setJobError(jobInfo.error || 'Job was interrupted');
+          setPendingTimeout(true);
+          setCancelledMessageIds(prev => new Set([...prev, pendingMessageId]));
+          return true; // Stop polling
+        }
+
         // Check for completion first (before timeout check)
         if (jobInfo.status === 'complete') {
           // Response should be ready - reload conversation

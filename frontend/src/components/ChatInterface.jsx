@@ -597,6 +597,7 @@ function getStageDisplayName(status) {
     case 'stage3': return 'Stage 3: Final synthesis';
     case 'complete': return 'Complete';
     case 'cancelled': return 'Cancelled';
+    case 'stale': return 'Interrupted';
     case 'error': return 'Error';
     default: return 'Processing';
   }

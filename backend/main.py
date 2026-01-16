@@ -595,10 +595,27 @@ async def get_job_status(conversation_id: str, message_id: str):
     """
     Get job status for a user message.
     Returns status, started_at, elapsed_seconds, and error (if any).
+
+    Also detects stale jobs: if a job has an intermediate status but isn't
+    actually running (e.g., server restarted), mark it as 'stale'.
     """
     job_info = storage.get_job_info(conversation_id, message_id)
     if job_info is None:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Check for stale jobs: intermediate status but not actually running
+    intermediate_statuses = {'pending', 'stage1', 'stage2', 'stage3'}
+    job_key = (conversation_id, message_id)
+
+    if job_info.get('status') in intermediate_statuses:
+        if job_key not in running_jobs:
+            # Job has intermediate status but isn't running - it's stale
+            # This happens when server restarts or job dies without cleanup
+            storage.update_job_status(conversation_id, message_id, 'stale',
+                                      error='Job was interrupted (server restart or crash)')
+            job_info['status'] = 'stale'
+            job_info['error'] = 'Job was interrupted (server restart or crash)'
+
     return job_info
 
 
