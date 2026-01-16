@@ -384,8 +384,25 @@ const AssistantMessage = memo(function AssistantMessage({
       {/* Stage 1 */}
       {msg.loading?.stage1 && (
         <div className="stage-loading">
-          <div className="spinner"></div>
-          <span>Running Stage 1: Collecting individual responses...</span>
+          <div className="stage-loading-header">
+            <div className="spinner"></div>
+            <span>Stage 1: Collecting responses</span>
+          </div>
+          {msg.loading.modelProgress && (
+            <div className="model-progress">
+              {Object.entries(msg.loading.modelProgress).map(([model, status]) => {
+                const shortName = model.split('/')[1] || model;
+                return (
+                  <div key={model} className={`model-status ${status}`} title={model}>
+                    {status === 'complete' && <span className="status-icon">✓</span>}
+                    {status === 'pending' && <span className="status-icon spinner-small"></span>}
+                    {status === 'failed' && <span className="status-icon">✗</span>}
+                    <span className="model-name">{shortName}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
       {msg.stage1 && <Stage1 responses={msg.stage1} />}
@@ -393,8 +410,25 @@ const AssistantMessage = memo(function AssistantMessage({
       {/* Stage 2 */}
       {msg.loading?.stage2 && (
         <div className="stage-loading">
-          <div className="spinner"></div>
-          <span>Running Stage 2: Peer rankings...</span>
+          <div className="stage-loading-header">
+            <div className="spinner"></div>
+            <span>Stage 2: Peer rankings</span>
+          </div>
+          {msg.loading.modelProgress && (
+            <div className="model-progress">
+              {Object.entries(msg.loading.modelProgress).map(([model, status]) => {
+                const shortName = model.split('/')[1] || model;
+                return (
+                  <div key={model} className={`model-status ${status}`} title={model}>
+                    {status === 'complete' && <span className="status-icon">✓</span>}
+                    {status === 'pending' && <span className="status-icon spinner-small"></span>}
+                    {status === 'failed' && <span className="status-icon">✗</span>}
+                    <span className="model-name">{shortName}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
       {msg.stage2 && (
@@ -408,8 +442,10 @@ const AssistantMessage = memo(function AssistantMessage({
       {/* Stage 3 */}
       {msg.loading?.stage3 && (
         <div className="stage-loading">
-          <div className="spinner"></div>
-          <span>Running Stage 3: Final synthesis...</span>
+          <div className="stage-loading-header">
+            <div className="spinner"></div>
+            <span>Stage 3: Final synthesis</span>
+          </div>
         </div>
       )}
       {msg.stage3 && <Stage3 finalResponse={msg.stage3} />}

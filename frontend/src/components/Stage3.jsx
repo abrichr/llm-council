@@ -54,7 +54,9 @@ export default memo(function Stage3({ finalResponse }) {
       </div>
       <div className="final-response">
         <div className="chairman-label">
-          Chairman: {finalResponse.model.split('/')[1] || finalResponse.model}
+          Chairman: {typeof finalResponse.model === 'string'
+            ? (finalResponse.model.split('/')[1] || finalResponse.model)
+            : String(finalResponse.model)}
         </div>
         <div className="final-text">
           <Markdown>{finalResponse.response}</Markdown>

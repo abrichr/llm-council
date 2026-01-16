@@ -297,7 +297,48 @@ function App() {
         break;
 
       case 'stage1_start':
-        // The assistant message doesn't exist yet, we'll create it on stage1_complete
+        // Initialize model progress tracking
+        setCurrentConversation(prev => {
+          if (!prev) return prev;
+          const assistantMsgId = prev.current_path[prev.current_path.length - 1];
+          if (assistantMsgId && prev.messages[assistantMsgId]?.role === 'assistant') {
+            const models = event.data?.models || [];
+            const modelProgress = {};
+            models.forEach(m => { modelProgress[m] = 'pending'; });
+            const newMessages = { ...prev.messages };
+            newMessages[assistantMsgId] = {
+              ...newMessages[assistantMsgId],
+              loading: {
+                ...newMessages[assistantMsgId].loading,
+                stage1: true,
+                currentStage: 1,
+                modelProgress
+              }
+            };
+            return { ...prev, messages: newMessages };
+          }
+          return prev;
+        });
+        break;
+
+      case 'model_complete':
+        // Update individual model status
+        setCurrentConversation(prev => {
+          if (!prev) return prev;
+          const assistantMsgId = prev.current_path[prev.current_path.length - 1];
+          if (assistantMsgId && prev.messages[assistantMsgId]?.role === 'assistant') {
+            const newMessages = { ...prev.messages };
+            const loading = newMessages[assistantMsgId].loading || {};
+            const modelProgress = { ...loading.modelProgress };
+            modelProgress[event.data.model] = event.data.status;
+            newMessages[assistantMsgId] = {
+              ...newMessages[assistantMsgId],
+              loading: { ...loading, modelProgress }
+            };
+            return { ...prev, messages: newMessages };
+          }
+          return prev;
+        });
         break;
 
       case 'stage1_complete':
@@ -324,10 +365,18 @@ function App() {
           if (!prev) return prev;
           const assistantMsgId = prev.current_path[prev.current_path.length - 1];
           if (assistantMsgId && prev.messages[assistantMsgId]?.role === 'assistant') {
+            const models = event.data?.models || [];
+            const modelProgress = {};
+            models.forEach(m => { modelProgress[m] = 'pending'; });
             const newMessages = { ...prev.messages };
             newMessages[assistantMsgId] = {
               ...newMessages[assistantMsgId],
-              loading: { ...newMessages[assistantMsgId].loading, stage2: true }
+              loading: {
+                ...newMessages[assistantMsgId].loading,
+                stage2: true,
+                currentStage: 2,
+                modelProgress
+              }
             };
             return { ...prev, messages: newMessages };
           }

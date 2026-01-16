@@ -185,7 +185,7 @@
 
 .stage-loading {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 12px;
   padding: 16px;
   margin: 12px 0;
@@ -194,6 +194,12 @@
   border: 1px solid #e0e0e0;
   color: #666;
   font-size: 14px;
+}
+
+.stage-loading-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-style: italic;
 }
 
@@ -202,6 +208,60 @@
   align-items: center;
   gap: 12px;
   flex: 1;
+}
+
+/* Model progress indicators */
+.model-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.model-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px;
+  font-size: 12px;
+  font-style: normal;
+  transition: all 0.2s;
+}
+
+.model-status.pending {
+  color: #888;
+}
+
+.model-status.complete {
+  background: #e8f5e9;
+  border-color: #4caf50;
+  color: #2e7d32;
+}
+
+.model-status.failed {
+  background: #ffebee;
+  border-color: #ef5350;
+  color: #c62828;
+}
+
+.status-icon {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.spinner-small {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #888;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.model-name {
+  font-weight: 500;
 }
 
 /* Stop button */
