@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import { api } from './api';
@@ -67,6 +67,8 @@ function App() {
   const [jobStatus, setJobStatus] = useState(null); // Current job status from backend
   const [jobError, setJobError] = useState(null); // Job error message from backend
   const [modelProgress, setModelProgress] = useState({}); // Per-model progress tracking
+  const [cancelledMessageIds, setCancelledMessageIds] = useState(new Set()); // Messages that were cancelled
+  const abortControllerRef = useRef(null); // For aborting active streaming
   const [excludedFromCopy, setExcludedFromCopy] = useState(new Set()); // Messages manually excluded from copy/export
   const [excludedFromContext, setExcludedFromContext] = useState(new Set()); // Messages manually excluded from API context
   const [copyCharThreshold, setCopyCharThreshold] = useState(100000); // Auto-exclude from copy if > this
@@ -124,6 +126,12 @@ function App() {
       return;
     }
 
+    // Skip polling for messages we've already cancelled
+    if (cancelledMessageIds.has(pendingMessageId)) {
+      console.log('Skipping cancelled message:', pendingMessageId);
+      return;
+    }
+
     // Last message is from user - poll job status endpoint
     console.log('Detected pending response, polling job status for message:', pendingMessageId);
     const TIMEOUT_SECONDS = 120; // 2 minute timeout
@@ -151,13 +159,15 @@ function App() {
 
         // Check for cancelled status
         if (jobInfo.status === 'cancelled') {
-          console.log('Job was cancelled');
-          setJobStatus('cancelled');
+          console.log('Job was cancelled, adding to cancelled set:', pendingMessageId);
+          // Add to cancelled set BEFORE reloading to prevent re-polling
+          setCancelledMessageIds(prev => new Set([...prev, pendingMessageId]));
+          setJobStatus(null);
+          setPendingSeconds(0);
+          setModelProgress({});
           // Reload conversation to clean up
           const conv = await api.getConversation(currentConversationId);
           setCurrentConversation(conv);
-          setPendingSeconds(0);
-          setModelProgress({});
           return true; // Stop polling
         }
 
@@ -228,7 +238,7 @@ function App() {
       stopped = true;
       clearInterval(pollInterval);
     };
-  }, [currentConversationId, currentConversation, isLoading, getPendingUserMessageId]);
+  }, [currentConversationId, currentConversation, isLoading, getPendingUserMessageId, cancelledMessageIds]);
 
   const loadConversations = async () => {
     try {
@@ -252,12 +262,14 @@ function App() {
     try {
       setIsLoading(false);
       setEditingMessageId(null);
+      setCancelledMessageIds(new Set()); // Clear cancelled messages for new conversation
       const newConv = await api.createConversation();
       setConversations([
         { id: newConv.id, created_at: newConv.created_at, title: newConv.title, message_count: 0 },
         ...conversations,
       ]);
       setCurrentConversationId(newConv.id);
+      window.history.pushState({}, '', `?conversation=${newConv.id}`);
     } catch (error) {
       console.error('Failed to create conversation:', error);
     }
@@ -266,6 +278,7 @@ function App() {
   const handleSelectConversation = (id) => {
     setIsLoading(false);
     setEditingMessageId(null);
+    setCancelledMessageIds(new Set()); // Clear cancelled messages when switching
     setCurrentConversationId(id);
     window.history.pushState({}, '', `?conversation=${id}`);
   };
@@ -473,6 +486,9 @@ function App() {
     setIsLoading(true);
     let userMsgId = null;
 
+    // Create AbortController for cancellation
+    abortControllerRef.current = new AbortController();
+
     try {
       // Get current conversation state
       const currentPath = currentConversation?.current_path || [];
@@ -520,6 +536,8 @@ function App() {
         // When we get the real IDs, update state
         if (eventType === 'user_message_created' && event.data?.message_id) {
           userMsgId = event.data.message_id;
+          // Update sidebar immediately when user message is created
+          loadConversations();
         }
 
         if (eventType === 'complete' && event.data) {
@@ -546,15 +564,22 @@ function App() {
           loadConversation(currentConversationId);
           loadConversations();
           setIsLoading(false);
+          abortControllerRef.current = null;
         } else {
           processStreamEvent(eventType, event, userMsgId, (id) => { userMsgId = id; });
         }
-      }, excludedIds);
+      }, excludedIds, abortControllerRef.current?.signal);
     } catch (error) {
+      // Ignore abort errors (user cancelled)
+      if (error.name === 'AbortError') {
+        console.log('Request was cancelled');
+        return;
+      }
       console.error('Failed to send message:', error);
       // Reload conversation to restore state
       loadConversation(currentConversationId);
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -563,6 +588,9 @@ function App() {
 
     setIsLoading(true);
     setEditingMessageId(messageId);
+
+    // Create AbortController for cancellation
+    abortControllerRef.current = new AbortController();
 
     // Get the original message to find its parent
     const originalMessage = currentConversation?.messages?.[messageId];
@@ -716,6 +744,7 @@ function App() {
             loadConversation(currentConversationId);
             loadConversations();
             setIsLoading(false);
+            abortControllerRef.current = null;
             break;
 
           case 'error':
@@ -723,17 +752,24 @@ function App() {
             // Reload to restore original state
             loadConversation(currentConversationId);
             setIsLoading(false);
+            abortControllerRef.current = null;
             break;
 
           default:
             console.log('Unknown event type:', eventType);
         }
-      });
+      }, abortControllerRef.current?.signal);
     } catch (error) {
+      // Ignore abort errors (user cancelled)
+      if (error.name === 'AbortError') {
+        console.log('Edit request was cancelled');
+        return;
+      }
       console.error('Failed to edit message:', error);
       // Reload to restore original state
       loadConversation(currentConversationId);
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -762,8 +798,9 @@ function App() {
     return getSiblingsInfo(currentConversation, messageId);
   }, [currentConversation]);
 
-  // Check if we're waiting for a response (last message is user, not actively loading)
-  const isPendingResponse = !isLoading && checkIfPendingResponse(currentConversation);
+  // Check if we're waiting for a response (last message is user, not actively loading, not cancelled)
+  const pendingMessageId = getPendingUserMessageId(currentConversation);
+  const isPendingResponse = !isLoading && pendingMessageId && !cancelledMessageIds.has(pendingMessageId);
 
   // Helper to get character count for a message
   const getMessageCharCount = useCallback((msg) => {
@@ -828,18 +865,58 @@ function App() {
     });
   }, []);
 
-  // Cancel a running job
+  // Cancel a running job or active streaming
   const handleCancel = useCallback(async () => {
+    // If actively streaming, abort the fetch
+    if (isLoading && abortControllerRef.current) {
+      console.log('Aborting active streaming');
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+      setEditingMessageId(null);
+      setModelProgress({});
+
+      // Clear loading indicators from the assistant message but keep stage data
+      setCurrentConversation(prev => {
+        if (!prev) return prev;
+        const assistantMsgId = prev.current_path?.[prev.current_path.length - 1];
+        if (assistantMsgId && prev.messages[assistantMsgId]?.role === 'assistant') {
+          const newMessages = { ...prev.messages };
+          newMessages[assistantMsgId] = {
+            ...newMessages[assistantMsgId],
+            loading: { stage1: false, stage2: false, stage3: false }
+          };
+          return { ...prev, messages: newMessages };
+        }
+        return prev;
+      });
+
+      // Try to cancel the backend job
+      const pendingMessageId = getPendingUserMessageId(currentConversation);
+      if (pendingMessageId && currentConversationId) {
+        try {
+          await api.cancelJob(currentConversationId, pendingMessageId);
+          setCancelledMessageIds(prev => new Set([...prev, pendingMessageId]));
+        } catch (error) {
+          console.log('Backend cancel (best effort):', error.message);
+        }
+      }
+      return;
+    }
+
+    // If not actively streaming but have pending response, just cancel the backend job
     const pendingMessageId = getPendingUserMessageId(currentConversation);
     if (!pendingMessageId || !currentConversationId) return;
 
     try {
       await api.cancelJob(currentConversationId, pendingMessageId);
+      // Track this message as cancelled to prevent re-polling
+      setCancelledMessageIds(prev => new Set([...prev, pendingMessageId]));
       // Reset state
       setIsLoading(false);
       setPendingTimeout(false);
       setPendingSeconds(0);
-      setJobStatus('cancelled');
+      setJobStatus(null);
       setJobError(null);
       setModelProgress({});
       // Reload conversation to get clean state
@@ -847,7 +924,7 @@ function App() {
     } catch (error) {
       console.error('Failed to cancel job:', error);
     }
-  }, [currentConversationId, currentConversation, getPendingUserMessageId]);
+  }, [currentConversationId, currentConversation, getPendingUserMessageId, isLoading]);
 
   return (
     <div className="app">

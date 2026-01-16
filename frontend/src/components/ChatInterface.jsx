@@ -850,16 +850,6 @@ const MessagesList = memo(function MessagesList({
                   )}
                   {pendingSeconds > 30 && !jobStatus && " - this is taking longer than usual"}
                 </span>
-                <button
-                  className="stop-button"
-                  onClick={onCancel}
-                  title="Stop generation and edit prompt"
-                >
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <rect x="6" y="6" width="12" height="12" rx="2" />
-                  </svg>
-                  Stop
-                </button>
               </div>
               <ModelProgressIndicator modelProgress={modelProgress} stage={jobStatus} />
             </div>
@@ -972,13 +962,27 @@ export default function ChatInterface({
           disabled={isLoading || isPendingResponse}
           rows={3}
         />
-        <button
-          type="submit"
-          className="send-button"
-          disabled={!input.trim() || isLoading || isPendingResponse}
-        >
-          Send
-        </button>
+        {(isLoading || isPendingResponse) ? (
+          <button
+            type="button"
+            className="stop-button"
+            onClick={onCancel}
+            title="Stop generation"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+            Stop
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className="send-button"
+            disabled={!input.trim()}
+          >
+            Send
+          </button>
+        )}
       </form>
     </div>
   );

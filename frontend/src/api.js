@@ -103,21 +103,26 @@ export const api = {
    * @param {string[]} excludedMessageIds - Optional array of message IDs to exclude from context
    * @returns {Promise<void>}
    */
-  async sendMessageStream(conversationId, content, onEvent, excludedMessageIds = null) {
+  async sendMessageStream(conversationId, content, onEvent, excludedMessageIds = null, signal = null) {
     const body = { content };
     if (excludedMessageIds && excludedMessageIds.length > 0) {
       body.excluded_message_ids = excludedMessageIds;
     }
 
+    const fetchOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    };
+    if (signal) {
+      fetchOptions.signal = signal;
+    }
+
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      }
+      fetchOptions
     );
 
     if (!response.ok) {
@@ -157,17 +162,23 @@ export const api = {
    * @param {string} messageId - The message ID to edit
    * @param {string} content - The new message content
    * @param {function} onEvent - Callback function for each event
+   * @param {AbortSignal} signal - Optional AbortSignal for cancellation
    */
-  async editMessageStream(conversationId, messageId, content, onEvent) {
+  async editMessageStream(conversationId, messageId, content, onEvent, signal = null) {
+    const fetchOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message_id: messageId, content }),
+    };
+    if (signal) {
+      fetchOptions.signal = signal;
+    }
+
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/edit/stream`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message_id: messageId, content }),
-      }
+      fetchOptions
     );
 
     if (!response.ok) {

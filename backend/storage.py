@@ -287,8 +287,13 @@ def list_conversations() -> List[Dict[str, Any]]:
                     data = json.load(f)
 
                     # Handle both v1 and v2 formats for message count
+                    # Use current_path length for v2 (shows messages in current branch)
                     if data.get("schema_version", 1) >= 2:
-                        message_count = count_messages_in_tree(data.get("messages", {}))
+                        messages = data.get("messages", {})
+                        current_leaf_id = data.get("current_leaf_id")
+                        # Compute current_path from current_leaf_id
+                        current_path = get_message_path(messages, current_leaf_id)
+                        message_count = len(current_path)
                     else:
                         message_count = len(data.get("messages", []))
 
@@ -328,9 +333,19 @@ def add_user_message(
     if conversation is None:
         raise ValueError(f"Conversation {conversation_id} not found")
 
+    messages = conversation.get("messages", {})
+
     # Use current_leaf_id as parent if not specified
     if parent_id is None:
         parent_id = conversation.get("current_leaf_id")
+
+    # If the current leaf is a user message (e.g., cancelled request),
+    # create a sibling instead of a child (use the leaf's parent)
+    if parent_id and parent_id in messages:
+        leaf_msg = messages[parent_id]
+        if leaf_msg.get("role") == "user":
+            # Create sibling by using the same parent as the current leaf
+            parent_id = leaf_msg.get("parent_id")
 
     msg_id = generate_message_id()
     conversation["messages"][msg_id] = {
