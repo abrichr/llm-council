@@ -262,4 +262,70 @@ export const api = {
     }
     return response.json();
   },
+
+  /**
+   * Delete a conversation permanently.
+   * @param {string} conversationId - The conversation ID
+   * @returns {Promise<{status: string, message: string}>}
+   */
+  async deleteConversation(conversationId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}`,
+      {
+        method: 'DELETE',
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to delete conversation');
+    }
+    return response.json();
+  },
+
+  /**
+   * Archive a conversation.
+   * @param {string} conversationId - The conversation ID
+   * @returns {Promise<{status: string, message: string}>}
+   */
+  async archiveConversation(conversationId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/archive`,
+      {
+        method: 'POST',
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to archive conversation');
+    }
+    return response.json();
+  },
+
+  /**
+   * Unarchive a conversation.
+   * @param {string} conversationId - The conversation ID
+   * @returns {Promise<{status: string, message: string}>}
+   */
+  async unarchiveConversation(conversationId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/unarchive`,
+      {
+        method: 'POST',
+      }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to unarchive conversation');
+    }
+    return response.json();
+  },
+
+  /**
+   * List all archived conversations.
+   * @returns {Promise<Array<{id: string, created_at: string, title: string, message_count: number}>>}
+   */
+  async listArchivedConversations() {
+    const response = await fetch(`${API_BASE}/api/archived-conversations`);
+    if (!response.ok) {
+      throw new Error('Failed to list archived conversations');
+    }
+    return response.json();
+  },
 };

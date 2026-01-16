@@ -4,12 +4,48 @@ import json
 import os
 import uuid
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from pathlib import Path
 from .config import DATA_DIR
 
+
+def format_number_with_commas(num: int) -> str:
+    """Format a number with commas for readability (e.g., 12345 -> '12,345')."""
+    return f"{num:,}"
+
+
+def create_snip_placeholder(text: str, head_chars: int = 100, tail_chars: int = 100) -> str:
+    """
+    Create a smart placeholder for truncated content.
+    Shows the first and last N characters with a snip indicator in between.
+
+    Args:
+        text: The full text to truncate
+        head_chars: Number of characters to show at the start (default: 100)
+        tail_chars: Number of characters to show at the end (default: 100)
+
+    Returns:
+        The truncated text with snip placeholder, or original text if short enough
+    """
+    if not text or not isinstance(text, str):
+        return text or ""
+
+    min_length = head_chars + tail_chars + 50  # Need some content to snip
+
+    if len(text) <= min_length:
+        return text
+
+    head = text[:head_chars]
+    tail = text[-tail_chars:]
+    snipped_chars = len(text) - head_chars - tail_chars
+
+    return f"{head}\n\n... snip {format_number_with_commas(snipped_chars)} characters ...\n\n{tail}"
+
 # Current schema version
 SCHEMA_VERSION = 2
+
+# Archived conversations directory
+ARCHIVE_DIR = os.path.join(os.path.dirname(DATA_DIR), "archived")
 
 
 def ensure_data_dir():
@@ -17,9 +53,19 @@ def ensure_data_dir():
     Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
 
+def ensure_archive_dir():
+    """Ensure the archive directory exists."""
+    Path(ARCHIVE_DIR).mkdir(parents=True, exist_ok=True)
+
+
 def get_conversation_path(conversation_id: str) -> str:
     """Get the file path for a conversation."""
     return os.path.join(DATA_DIR, f"{conversation_id}.json")
+
+
+def get_archived_conversation_path(conversation_id: str) -> str:
+    """Get the file path for an archived conversation."""
+    return os.path.join(ARCHIVE_DIR, f"{conversation_id}.json")
 
 
 def generate_message_id() -> str:
@@ -151,32 +197,60 @@ def find_branch_leaf(messages: Dict[str, Any], message_id: str) -> str:
 
 def get_conversation_history_from_path(
     messages: Dict[str, Any],
-    path: List[str]
+    path: List[str],
+    excluded_ids: Optional[Set[str]] = None
 ) -> List[Dict[str, Any]]:
     """
     Convert a message path to conversation history format for the council.
 
+    For excluded messages, includes a smart placeholder showing the first and last
+    100 characters with a "snip X characters" indicator, giving the LLM some
+    context without the full content.
+
     Args:
         messages: Dict of message_id -> message
         path: Ordered list of message IDs
+        excluded_ids: Optional set of message IDs to truncate with smart placeholders
 
     Returns:
         List of messages in the format expected by council.py
     """
     history = []
+    excluded = excluded_ids or set()
+
     for msg_id in path:
         if msg_id in messages:
             msg = messages[msg_id]
+            is_excluded = msg_id in excluded
+
             # Return the message without tree-specific fields
             history_msg = {
                 "role": msg["role"],
             }
+
             if msg["role"] == "user":
-                history_msg["content"] = msg.get("content", "")
+                content = msg.get("content", "")
+                if is_excluded:
+                    # Create smart placeholder for excluded user message
+                    history_msg["content"] = f"[Excluded from context]\n\n{create_snip_placeholder(content, 100, 100)}"
+                else:
+                    history_msg["content"] = content
             elif msg["role"] == "assistant":
-                history_msg["stage1"] = msg.get("stage1")
-                history_msg["stage2"] = msg.get("stage2")
-                history_msg["stage3"] = msg.get("stage3")
+                if is_excluded:
+                    # For excluded assistant messages, create a truncated stage3 response
+                    # and clear stage1/stage2 to reduce context size
+                    stage3 = msg.get("stage3", {})
+                    response = stage3.get("response", "") if stage3 else ""
+                    history_msg["stage1"] = None
+                    history_msg["stage2"] = None
+                    history_msg["stage3"] = {
+                        "response": f"[Excluded from context]\n\n{create_snip_placeholder(response, 100, 100)}"
+                    }
+                else:
+                    history_msg["stage1"] = msg.get("stage1")
+                    history_msg["stage2"] = msg.get("stage2")
+                    history_msg["stage3"] = msg.get("stage3")
+
             history.append(history_msg)
     return history
 
@@ -226,6 +300,7 @@ def create_conversation(conversation_id: str) -> Dict[str, Any]:
 def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
     """
     Load a conversation from storage, migrating if needed.
+    Checks both active and archived directories.
 
     Args:
         conversation_id: Unique identifier for the conversation
@@ -233,7 +308,12 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Conversation dict (v2 format) or None if not found
     """
+    # Check active directory first
     path = get_conversation_path(conversation_id)
+
+    # If not in active, check archived directory
+    if not os.path.exists(path):
+        path = get_archived_conversation_path(conversation_id)
 
     if not os.path.exists(path):
         return None
@@ -241,11 +321,12 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
     with open(path, 'r') as f:
         conversation = json.load(f)
 
-    # Migrate if needed
+    # Migrate if needed - save back to the same location
     if conversation.get("schema_version", 1) < SCHEMA_VERSION:
         conversation = migrate_v1_to_v2(conversation)
-        # Save migrated version
-        save_conversation(conversation)
+        # Save migrated version to same location (don't unarchive)
+        with open(path, 'w') as f:
+            json.dump(conversation, f, indent=2)
 
     return conversation
 
@@ -469,7 +550,8 @@ def add_assistant_message(
     stage1: List[Dict[str, Any]],
     stage2: List[Dict[str, Any]],
     stage3: Dict[str, Any],
-    parent_id: Optional[str] = None
+    parent_id: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Add an assistant message with all 3 stages to a conversation.
@@ -480,6 +562,7 @@ def add_assistant_message(
         stage2: List of model rankings
         stage3: Final synthesized response
         parent_id: Parent message ID (uses current_leaf_id if None)
+        metadata: Optional metadata dict (label_to_model, aggregate_rankings)
 
     Returns:
         The new message ID
@@ -493,7 +576,7 @@ def add_assistant_message(
         parent_id = conversation.get("current_leaf_id")
 
     msg_id = generate_message_id()
-    conversation["messages"][msg_id] = {
+    msg_data = {
         "id": msg_id,
         "parent_id": parent_id,
         "role": "assistant",
@@ -502,6 +585,12 @@ def add_assistant_message(
         "stage3": stage3,
         "created_at": datetime.utcnow().isoformat()
     }
+
+    # Add metadata if provided
+    if metadata:
+        msg_data["metadata"] = metadata
+
+    conversation["messages"][msg_id] = msg_data
 
     # Update current_leaf_id
     conversation["current_leaf_id"] = msg_id
@@ -580,3 +669,115 @@ def get_conversation_with_path(conversation_id: str) -> Optional[Dict[str, Any]]
     conversation["current_path"] = get_message_path(messages, current_leaf_id)
 
     return conversation
+
+
+def delete_conversation(conversation_id: str) -> bool:
+    """
+    Delete a conversation from storage.
+
+    Args:
+        conversation_id: Unique identifier for the conversation
+
+    Returns:
+        True if deleted, False if not found
+    """
+    path = get_conversation_path(conversation_id)
+
+    if not os.path.exists(path):
+        return False
+
+    os.remove(path)
+    return True
+
+
+def archive_conversation(conversation_id: str) -> bool:
+    """
+    Archive a conversation by moving it to the archive directory.
+
+    Args:
+        conversation_id: Unique identifier for the conversation
+
+    Returns:
+        True if archived, False if not found
+    """
+    source_path = get_conversation_path(conversation_id)
+
+    if not os.path.exists(source_path):
+        return False
+
+    ensure_archive_dir()
+    dest_path = get_archived_conversation_path(conversation_id)
+
+    # Move the file
+    os.rename(source_path, dest_path)
+    return True
+
+
+def unarchive_conversation(conversation_id: str) -> bool:
+    """
+    Unarchive a conversation by moving it back to the main data directory.
+
+    Args:
+        conversation_id: Unique identifier for the conversation
+
+    Returns:
+        True if unarchived, False if not found
+    """
+    source_path = get_archived_conversation_path(conversation_id)
+
+    if not os.path.exists(source_path):
+        return False
+
+    ensure_data_dir()
+    dest_path = get_conversation_path(conversation_id)
+
+    # Move the file back
+    os.rename(source_path, dest_path)
+    return True
+
+
+def list_archived_conversations() -> List[Dict[str, Any]]:
+    """
+    List all archived conversations (metadata only).
+
+    Returns:
+        List of archived conversation metadata dicts
+    """
+    ensure_archive_dir()
+
+    conversations = []
+    archive_path = Path(ARCHIVE_DIR)
+
+    if not archive_path.exists():
+        return conversations
+
+    for filename in os.listdir(ARCHIVE_DIR):
+        if filename.endswith('.json'):
+            filepath = os.path.join(ARCHIVE_DIR, filename)
+            try:
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+
+                    # Handle both v1 and v2 formats for message count
+                    if data.get("schema_version", 1) >= 2:
+                        messages = data.get("messages", {})
+                        current_leaf_id = data.get("current_leaf_id")
+                        current_path = get_message_path(messages, current_leaf_id)
+                        message_count = len(current_path)
+                    else:
+                        message_count = len(data.get("messages", []))
+
+                    conversations.append({
+                        "id": data["id"],
+                        "created_at": data.get("created_at", ""),
+                        "title": data.get("title", "New Conversation"),
+                        "message_count": message_count
+                    })
+            except (json.JSONDecodeError, KeyError):
+                # Skip corrupted files
+                continue
+
+    # Sort by creation time, newest first
+    conversations.sort(key=lambda x: x["created_at"], reverse=True)
+
+    return conversations

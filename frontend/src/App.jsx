@@ -58,6 +58,8 @@ function getSiblingsInfo(conversation, messageId) {
 
 function App() {
   const [conversations, setConversations] = useState([]);
+  const [archivedConversations, setArchivedConversations] = useState([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -77,6 +79,7 @@ function App() {
   // Load conversations on mount and check URL for conversation ID
   useEffect(() => {
     loadConversations();
+    loadArchivedConversations();
 
     // Check URL for conversation parameter
     const params = new URLSearchParams(window.location.search);
@@ -258,6 +261,15 @@ function App() {
     }
   };
 
+  const loadArchivedConversations = async () => {
+    try {
+      const convs = await api.listArchivedConversations();
+      setArchivedConversations(convs);
+    } catch (error) {
+      console.error('Failed to load archived conversations:', error);
+    }
+  };
+
   const loadConversation = async (id) => {
     try {
       const conv = await api.getConversation(id);
@@ -290,6 +302,55 @@ function App() {
     setCancelledMessageIds(new Set()); // Clear cancelled messages when switching
     setCurrentConversationId(id);
     window.history.pushState({}, '', `?conversation=${id}`);
+  };
+
+  const handleArchiveConversation = async (id) => {
+    try {
+      await api.archiveConversation(id);
+      // If we archived the current conversation, clear it
+      if (id === currentConversationId) {
+        setCurrentConversationId(null);
+        setCurrentConversation(null);
+        window.history.pushState({}, '', window.location.pathname);
+      }
+      // Refresh both lists
+      loadConversations();
+      loadArchivedConversations();
+    } catch (error) {
+      console.error('Failed to archive conversation:', error);
+    }
+  };
+
+  const handleUnarchiveConversation = async (id) => {
+    try {
+      await api.unarchiveConversation(id);
+      // Refresh both lists
+      loadConversations();
+      loadArchivedConversations();
+    } catch (error) {
+      console.error('Failed to unarchive conversation:', error);
+    }
+  };
+
+  const handleDeleteConversation = async (id) => {
+    try {
+      await api.deleteConversation(id);
+      // If we deleted the current conversation, clear it
+      if (id === currentConversationId) {
+        setCurrentConversationId(null);
+        setCurrentConversation(null);
+        window.history.pushState({}, '', window.location.pathname);
+      }
+      // Refresh both lists (in case it was archived)
+      loadConversations();
+      loadArchivedConversations();
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+    }
+  };
+
+  const handleToggleShowArchived = (show) => {
+    setShowArchived(show);
   };
 
   /**
@@ -939,9 +1000,15 @@ function App() {
     <div className="app">
       <Sidebar
         conversations={conversations}
+        archivedConversations={archivedConversations}
         currentConversationId={currentConversationId}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+        onArchiveConversation={handleArchiveConversation}
+        onUnarchiveConversation={handleUnarchiveConversation}
+        onDeleteConversation={handleDeleteConversation}
+        showArchived={showArchived}
+        onToggleShowArchived={handleToggleShowArchived}
       />
       <ChatInterface
         conversation={currentConversation}

@@ -3,6 +3,7 @@ import Markdown from './Markdown';
 import Stage1 from './Stage1';
 import Stage2 from './Stage2';
 import Stage3 from './Stage3';
+import { createSnipPlaceholder } from '../utils/truncate';
 import './ChatInterface.css';
 
 // Version navigation component
@@ -528,19 +529,30 @@ function ExportButton({ messages, excludedFromCopy }) {
   const [copied, setCopied] = useState(false);
   const [copiedCount, setCopiedCount] = useState(0);
 
-  // Calculate export text and character count (excluding excluded messages)
+  // Calculate export text and character count (with smart placeholders for excluded messages)
   const getExportData = () => {
     const lines = [];
     const excluded = excludedFromCopy || new Set();
 
     for (const msg of messages) {
-      // Skip excluded messages
-      if (msg.id && excluded.has(msg.id)) continue;
+      const isExcluded = msg.id && excluded.has(msg.id);
 
       if (msg.role === 'user') {
-        lines.push(`## User\n\n${msg.content}\n`);
+        if (isExcluded) {
+          // Include smart placeholder for excluded user messages
+          const placeholder = createSnipPlaceholder(msg.content, 100, 100);
+          lines.push(`## User (excluded from context)\n\n${placeholder}\n`);
+        } else {
+          lines.push(`## User\n\n${msg.content}\n`);
+        }
       } else if (msg.stage3?.response) {
-        lines.push(`## Assistant\n\n${msg.stage3.response}\n`);
+        if (isExcluded) {
+          // Include smart placeholder for excluded assistant messages
+          const placeholder = createSnipPlaceholder(msg.stage3.response, 100, 100);
+          lines.push(`## Assistant (excluded from context)\n\n${placeholder}\n`);
+        } else {
+          lines.push(`## Assistant\n\n${msg.stage3.response}\n`);
+        }
       }
     }
 

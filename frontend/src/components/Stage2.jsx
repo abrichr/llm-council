@@ -48,6 +48,13 @@ export default memo(function Stage2({ rankings, labelToModel, aggregateRankings 
 
       {isExpanded && (
         <div className="stage-content">
+          {topModel && (
+            <div className="winner-banner">
+              <span className="winner-icon">🏆</span>
+              <span className="winner-label">Council's Top Pick:</span>
+              <span className="winner-model">{topModel}</span>
+            </div>
+          )}
           <h4>Raw Evaluations</h4>
           <p className="stage-description">
             Each model evaluated all responses (anonymized as Response A, B, C, etc.) and provided rankings.

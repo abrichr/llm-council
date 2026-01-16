@@ -127,10 +127,9 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
     current_leaf_id = conversation.get("current_leaf_id")
     current_path = storage.get_message_path(messages, current_leaf_id)
 
-    # Filter out excluded messages if specified
+    # Get excluded message IDs (will be shown as smart placeholders)
     excluded_ids = set(request.excluded_message_ids or [])
-    filtered_path = [mid for mid in current_path if mid not in excluded_ids]
-    conversation_history = storage.get_conversation_history_from_path(messages, filtered_path)
+    conversation_history = storage.get_conversation_history_from_path(messages, current_path, excluded_ids)
 
     # Add user message (automatically updates current_leaf_id)
     user_msg_id = storage.add_user_message(conversation_id, request.content)
@@ -151,7 +150,8 @@ async def send_message(conversation_id: str, request: SendMessageRequest):
         conversation_id,
         stage1_results,
         stage2_results,
-        stage3_result
+        stage3_result,
+        metadata=metadata
     )
 
     # Get updated conversation with path
@@ -189,10 +189,9 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
     current_leaf_id = conversation.get("current_leaf_id")
     current_path = storage.get_message_path(messages, current_leaf_id)
 
-    # Filter out excluded messages if specified
+    # Get excluded message IDs (will be shown as smart placeholders)
     excluded_ids = set(request.excluded_message_ids or [])
-    filtered_path = [mid for mid in current_path if mid not in excluded_ids]
-    conversation_history = storage.get_conversation_history_from_path(messages, filtered_path)
+    conversation_history = storage.get_conversation_history_from_path(messages, current_path, excluded_ids)
 
     async def event_generator():
         user_msg_id = None
@@ -349,12 +348,17 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 storage.update_conversation_title(conversation_id, title)
                 yield f"data: {json.dumps({'type': 'title_complete', 'data': {'title': title}})}\n\n"
 
-            # Save complete assistant message
+            # Save complete assistant message with metadata
+            metadata = {
+                'label_to_model': label_to_model,
+                'aggregate_rankings': aggregate_rankings
+            }
             assistant_msg_id = storage.add_assistant_message(
                 conversation_id,
                 stage1_results,
                 stage2_results,
-                stage3_result
+                stage3_result,
+                metadata=metadata
             )
 
             # Mark job as complete
@@ -441,7 +445,8 @@ async def edit_message(conversation_id: str, request: EditMessageRequest):
         conversation_id,
         stage1_results,
         stage2_results,
-        stage3_result
+        stage3_result,
+        metadata=metadata
     )
 
     # Get updated conversation with path
@@ -518,12 +523,17 @@ async def edit_message_stream(conversation_id: str, request: EditMessageRequest)
             stage3_result = await stage3_synthesize_final(request.content, stage1_results, stage2_results)
             yield f"data: {json.dumps({'type': 'stage3_complete', 'data': stage3_result})}\n\n"
 
-            # Save assistant message
+            # Save assistant message with metadata
+            metadata = {
+                'label_to_model': label_to_model,
+                'aggregate_rankings': aggregate_rankings
+            }
             new_assistant_msg_id = storage.add_assistant_message(
                 conversation_id,
                 stage1_results,
                 stage2_results,
-                stage3_result
+                stage3_result,
+                metadata=metadata
             )
 
             # Mark job as complete
@@ -646,6 +656,45 @@ async def cancel_job(conversation_id: str, message_id: str):
         pass  # Message might not exist
 
     return {"status": "cancelled", "message": "Job cancelled successfully"}
+
+
+@app.delete("/api/conversations/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """
+    Permanently delete a conversation.
+    """
+    deleted = storage.delete_conversation(conversation_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"status": "deleted", "message": "Conversation deleted successfully"}
+
+
+@app.post("/api/conversations/{conversation_id}/archive")
+async def archive_conversation(conversation_id: str):
+    """
+    Archive a conversation (move to archived folder).
+    """
+    archived = storage.archive_conversation(conversation_id)
+    if not archived:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return {"status": "archived", "message": "Conversation archived successfully"}
+
+
+@app.post("/api/conversations/{conversation_id}/unarchive")
+async def unarchive_conversation(conversation_id: str):
+    """
+    Unarchive a conversation (move back to active conversations).
+    """
+    unarchived = storage.unarchive_conversation(conversation_id)
+    if not unarchived:
+        raise HTTPException(status_code=404, detail="Archived conversation not found")
+    return {"status": "unarchived", "message": "Conversation unarchived successfully"}
+
+
+@app.get("/api/archived-conversations", response_model=List[ConversationMetadata])
+async def list_archived_conversations():
+    """List all archived conversations (metadata only)."""
+    return storage.list_archived_conversations()
 
 
 if __name__ == "__main__":
