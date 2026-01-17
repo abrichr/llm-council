@@ -150,6 +150,13 @@ Models are hardcoded in `backend/config.py`. Chairman can be same or different f
 2. **CORS Issues**: Frontend must match allowed origins in `main.py` CORS middleware
 3. **Ranking Parse Failures**: If models don't follow format, fallback regex extracts any "Response X" patterns in order
 4. **Missing Metadata**: Metadata is ephemeral (not persisted), only available in API responses
+5. **GitHub PR Editing**: `gh pr edit` may fail with "Projects (classic) deprecated" error. Use REST API instead:
+   ```bash
+   # Update PR title and body
+   gh api repos/karpathy/llm-council/pulls/PR_NUMBER -X PATCH \
+     -f title="new title" \
+     -f body="$(cat /tmp/pr-body.md)"
+   ```
 
 ## Future Enhancement Ideas
 
